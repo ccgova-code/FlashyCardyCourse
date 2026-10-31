@@ -1,0 +1,56 @@
+---
+alwaysApply: true
+---
+# UI Components
+
+This project uses shadcn/ui for all UI elements. Do not hand-roll buttons, inputs,
+dialogs, cards, or other primitives, and do not add a different component library.
+If a UI element is needed, add it from the shadcn registry first and compose on top
+of it.
+
+shadcn is already initialized. [components.json](mdc:components.json) is the source
+of truth for the configuration: the style is `radix-nova` (Radix UI primitives, Nova
+preset), with CSS variables, the `neutral` base color, and `lucide` icons. Theme
+tokens live in [app/globals.css](mdc:app/globals.css). Generated components go in
+`components/ui/` and are owned by this repo, so they can be edited directly.
+
+## Adding a component
+
+`npx` fails in this environment with "Access is denied" because npm binary shims are
+blocked, which is also why the scripts in [package.json](mdc:package.json) invoke
+`node node_modules/...` directly. Use the `ui` script instead, which runs the locally
+installed shadcn CLI:
+
+```bash
+npm run ui -- add button
+```
+
+Several components can be added in one call: `npm run ui -- add dialog input label`.
+Add `--yes` to skip prompts in a non-interactive shell.
+
+If shadcn is ever not initialized (no `components.json`), re-run init with the same
+base and preset so generated components stay consistent:
+
+```bash
+npm install -D shadcn
+npm run ui -- init --base radix --preset nova --yes
+```
+
+The canonical upstream commands are `npx shadcn@latest init` and
+`npx shadcn@latest add button`; they are equivalent but will not run here.
+
+## Conventions
+
+CLI v4 components import the class helper from the `cn` package rather than from
+`@/lib/utils`:
+
+```tsx
+import { cn } from "cn"
+```
+
+[lib/utils.ts](mdc:lib/utils.ts) re-exports `cn` and exists only for compatibility
+with older shadcn examples. Match whichever import the surrounding file already uses.
+
+Style components with the theme tokens (`bg-background`, `text-muted-foreground`,
+`border-border`, and so on) rather than raw Tailwind palette colors like `bg-zinc-50`,
+so light and dark mode both stay correct.

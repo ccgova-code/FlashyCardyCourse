@@ -1,0 +1,66 @@
+---
+alwaysApply: true
+description: Reads happen in Server Components. Inserts, updates, and deletes happen in Server Actions. Every action argument is a Zod-inferred TypeScript type, never FormData.
+---
+# Data access
+
+Reads and writes of `decks` and `cards` stay on the server. A Client Component
+never queries the database, never calls `fetch` for app data, and never talks
+to Drizzle. [src/index.ts](mdc:src/index.ts) is the seed script only; it is the
+one place a write may run outside a Server Action.
+
+Ownership still comes from `auth()` as described in
+[.cursor/rules/clerk.mdc](mdc:.cursor/rules/clerk.mdc). Zod checks the shape of
+input. It does not decide who owns a row.
+
+## Reads
+
+Load `decks` and `cards` in Server Components (pages, layouts, or async
+server-only helpers they call). Pass the result into Client Components as
+props. Do not load this data from a Client Component, a Route Handler, or a
+Server Action whose only job is to return rows.
+
+## Writes
+
+Every `insert`, `update`, and `delete` of `decks` or `cards` runs inside a
+Server Action. Put `'use server'` at the top of the action file. Do not mutate
+those tables from a Route Handler, a Server Component render, or client code.
+Queries themselves still follow
+[.cursor/rules/drizzle.mdc](mdc:.cursor/rules/drizzle.mdc).
+
+## Validation
+
+Validate with Zod from the `zod` package. Do not hand-check fields with
+`if` statements, and do not trust values because TypeScript already describes
+them.
+
+Every value passed into a Server Action has a TypeScript type derived from its
+Zod schema. The action parameter is that type. It is never `FormData`, and the
+action does not read fields with `formData.get`. A Client Component builds a
+plain object and passes that object.
+
+Parse the argument with `safeParse` before any write. Use `parsed.data` for the
+query. When parsing fails, return the validation error and do not write.
+
+```ts
+'use server'
+
+import { z } from 'zod'
+
+const createDeckSchema = z.object({
+  name: z.string().trim().min(1),
+  description: z.string().trim().optional(),
+})
+
+type CreateDeckInput = z.infer<typeof createDeckSchema>
+
+export async function createDeck(input: CreateDeckInput) {
+  const parsed = createDeckSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.flatten() }
+  }
+
+  const { name, description } = parsed.data
+  // insert name and description for the signed-in user
+}
+```

@@ -1,0 +1,47 @@
+---
+alwaysApply: true
+---
+# Database
+
+Every database read and write uses Drizzle ORM against the tables in
+[src/db/schema.ts](mdc:src/db/schema.ts). Do not write raw SQL, string-built
+queries, or `sql` fragments for ordinary reads and writes, and do not add a
+second query library or ORM. Columns you select, filter, insert, or update must
+be fields defined on those tables.
+
+## Schema
+
+Postgres tables, defined with `drizzle-orm/pg-core`:
+
+- `decks` — flashcard decks. `userId` is a Clerk user id (`varchar`), not a
+  foreign key, because auth lives in Clerk. Indexed on `userId`.
+- `cards` — belong to a deck through `deckId`, which references `decks.id`
+  with `onDelete: "cascade"`. Indexed on `deckId`.
+
+Both tables use an identity integer primary key and `createdAt` / `updatedAt`
+timestamps. `updatedAt` refreshes through `$onUpdate`.
+
+[drizzle.config.ts](mdc:drizzle.config.ts) points Drizzle Kit at
+`./src/db/schema.ts` (dialect `postgresql`, migrations in `./drizzle`,
+credentials from `DATABASE_URL`). Change the database by editing the schema
+file, then run the package scripts. `npx` fails in this environment, so use:
+
+```bash
+npm run db:generate
+npm run db:migrate
+```
+
+`npm run db:push` pushes the schema directly. Do not hand-edit generated SQL
+to add columns that are not in the schema.
+
+## Queries
+
+Create the client with `drizzle` from `drizzle-orm/neon-http` and
+`process.env.DATABASE_URL`. Import `decks` and `cards` from
+[src/db/schema.ts](mdc:src/db/schema.ts) and build queries with the Drizzle
+query API (`select`, `insert`, `update`, `delete`) plus helpers from
+`drizzle-orm` such as `eq`.
+
+[src/index.ts](mdc:src/index.ts) is the reference shape: `insert` with
+`.values()` and `.returning()`, `select` with `.from()` and `.where(eq(...))`,
+and `delete` with `.where(eq(...))`.

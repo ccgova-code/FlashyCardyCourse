@@ -1,0 +1,42 @@
+---
+alwaysApply: true
+description: Clerk is the only auth system, and every query must be limited to the signed-in user's own decks and cards.
+---
+# Auth
+
+Clerk is the only authentication system. Do not add another auth library, custom
+passwords, session cookies, or JWT handling.
+
+Session UI and route protection stay on the Clerk helpers already in the app:
+`ClerkProvider` in [app/layout.tsx](mdc:app/layout.tsx), `SignIn` and `SignUp`
+on the sign-in and sign-up pages, and `clerkMiddleware` in
+[proxy.ts](mdc:proxy.ts).
+
+## Whose data
+
+On the server, in Server Components, Server Actions, and Route Handlers, the
+signed-in user comes only from `auth()` in `@clerk/nextjs/server`:
+
+```ts
+const { userId } = await auth()
+```
+
+`userId` is the Clerk user id stored on `decks.userId` in
+[src/db/schema.ts](mdc:src/db/schema.ts). Never take it from search params, form
+data, headers, or a request body. A missing `userId` means the caller is signed
+out: do not read or write `decks` or `cards`.
+
+`cards` have no owner column. A card belongs to whoever owns its parent deck.
+An id supplied by the client is not proof of ownership.
+
+Every read and write must be scoped to that `userId`:
+
+- `decks`: every `select`, `insert`, `update`, and `delete` includes
+  `eq(decks.userId, userId)`. Inserts set `userId` to that same value.
+- `cards`: before selecting, inserting, updating, or deleting a card, the
+  parent deck must match both the deck id and `eq(decks.userId, userId)`.
+- If the ownership check matches nothing, treat the row as not found. Do not
+  fall back to a query by id alone.
+
+The `"user_example"` value in [src/index.ts](mdc:src/index.ts) is seed data
+only. Application code must not copy it.
