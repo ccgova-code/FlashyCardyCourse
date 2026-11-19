@@ -1,32 +1,73 @@
 ---
 alwaysApply: true
-description: Reads happen in Server Components. Inserts, updates, and deletes happen in Server Actions. Every action argument is a Zod-inferred TypeScript type, never FormData.
+description: Every read and write of decks and cards goes through a helper in src/db/queries. Server Components call the read helpers. Server Actions validate with Zod, then call the write helpers.
 ---
 # Data access
 
-Reads and writes of `decks` and `cards` stay on the server. A Client Component
-never queries the database, never calls `fetch` for app data, and never talks
-to Drizzle. [src/index.ts](mdc:src/index.ts) is the seed script only; it is the
-one place a write may run outside a Server Action.
+Reads and writes of `decks` and `cards` stay on the server and go through
+helper functions in `src/db/queries/`. A page, layout, Server Action, Route
+Handler, or Client Component never imports `db`, never imports `decks` or
+`cards` to build a query, and never calls `select`, `insert`, `update`, or
+`delete`. A Client Component never calls `fetch` for app data.
+[src/index.ts](mdc:src/index.ts) is the seed script only; it is the one place
+a write may run outside a Server Action, and it may keep its own Drizzle
+client.
 
 Ownership still comes from `auth()` as described in
-[.cursor/rules/clerk.mdc](mdc:.cursor/rules/clerk.mdc). Zod checks the shape of
-input. It does not decide who owns a row.
+[.cursor/rules/clerk.mdc](mdc:.cursor/rules/clerk.mdc). The caller passes that
+`userId` into the helper. Zod checks the shape of input. It does not decide
+who owns a row. Inside a helper, build the query as described in
+[.cursor/rules/drizzle.mdc](mdc:.cursor/rules/drizzle.mdc).
+
+## Queries
+
+Put one module per table in `src/db/queries/`: `decks.ts` and `cards.ts`.
+Each helper imports `db` from [src/db/index.ts](mdc:src/db/index.ts) and the
+table from [src/db/schema.ts](mdc:src/db/schema.ts). A helper takes plain
+arguments (`userId`, ids, and column values) and returns rows. It does not
+call `auth()`, read `FormData`, or validate with Zod.
+
+Every helper that reads or writes `decks` includes `eq(decks.userId, userId)`.
+Every helper that reads or writes `cards` checks that the parent deck matches
+both the deck id and `eq(decks.userId, userId)`. If that check matches
+nothing, return no row. Do not query by id alone.
+
+```ts
+import { desc, eq } from "drizzle-orm"
+import { db } from "@/src/db"
+import { decks } from "@/src/db/schema"
+
+export async function getDecksByUserId(userId: string) {
+  return db
+    .select()
+    .from(decks)
+    .where(eq(decks.userId, userId))
+    .orderBy(desc(decks.updatedAt))
+}
+
+export async function insertDeck(values: {
+  userId: string
+  name: string
+  description: string | null
+}) {
+  return db.insert(decks).values(values).returning()
+}
+```
 
 ## Reads
 
-Load `decks` and `cards` in Server Components (pages, layouts, or async
-server-only helpers they call). Pass the result into Client Components as
-props. Do not load this data from a Client Component, a Route Handler, or a
-Server Action whose only job is to return rows.
+Load `decks` and `cards` by calling those helpers from Server Components
+(pages, layouts, or async server-only helpers they call). Pass the result
+into Client Components as props. Do not load this data from a Client
+Component, a Route Handler, or a Server Action whose only job is to return
+rows.
 
 ## Writes
 
-Every `insert`, `update`, and `delete` of `decks` or `cards` runs inside a
-Server Action. Put `'use server'` at the top of the action file. Do not mutate
-those tables from a Route Handler, a Server Component render, or client code.
-Queries themselves still follow
-[.cursor/rules/drizzle.mdc](mdc:.cursor/rules/drizzle.mdc).
+Every `insert`, `update`, and `delete` of `decks` or `cards` is a helper in
+`src/db/queries/`, called from a Server Action. Put `'use server'` at the top
+of the action file. Do not mutate those tables from a Route Handler, a Server
+Component render, or client code.
 
 ## Validation
 
@@ -39,13 +80,15 @@ Zod schema. The action parameter is that type. It is never `FormData`, and the
 action does not read fields with `formData.get`. A Client Component builds a
 plain object and passes that object.
 
-Parse the argument with `safeParse` before any write. Use `parsed.data` for the
-query. When parsing fails, return the validation error and do not write.
+Parse the argument with `safeParse` before any write. Use `parsed.data` when
+calling the query helper. When parsing fails, return the validation error and
+do not write.
 
 ```ts
 'use server'
 
 import { z } from 'zod'
+import { insertDeck } from '@/src/db/queries/decks'
 
 const createDeckSchema = z.object({
   name: z.string().trim().min(1),
@@ -61,6 +104,6 @@ export async function createDeck(input: CreateDeckInput) {
   }
 
   const { name, description } = parsed.data
-  // insert name and description for the signed-in user
+  // userId comes from auth(); then call insertDeck({ userId, name, description })
 }
 ```

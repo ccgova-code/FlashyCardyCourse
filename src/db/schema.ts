@@ -8,6 +8,7 @@ export const decks = pgTable(
     userId: varchar({ length: 255 }).notNull(),
     name: varchar({ length: 255 }).notNull(),
     description: text(),
+    studiedCount: integer().default(0).notNull(),
     createdAt: timestamp().defaultNow().notNull(),
     updatedAt: timestamp()
       .defaultNow()

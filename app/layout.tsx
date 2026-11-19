@@ -1,15 +1,12 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Poppins } from "next/font/google";
-import {
-  ClerkProvider,
-  Show,
-  SignInButton,
-  SignUpButton,
-  UserButton,
-} from "@clerk/nextjs";
+import { ClerkProvider } from "@clerk/nextjs";
 import { dark, shadcn } from "@clerk/ui/themes";
 import { Suspense } from "react";
-import { Button } from "@/components/ui/button";
+import { HeaderAccount } from "@/components/header-account";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -32,25 +29,24 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             theme: [shadcn, dark],
             captcha: { theme: "dark" },
           }}
-          signInUrl="/sign-in"
           signUpUrl="/sign-up"
+          signInForceRedirectUrl="/dashboard"
         >
-          <header className="flex h-16 items-center justify-end gap-2 px-4">
-            <Suspense>
-              <Show when="signed-out">
-                <SignInButton>
-                  <Button variant="outline">Sign in</Button>
-                </SignInButton>
-                <SignUpButton>
-                  <Button>Sign up</Button>
-                </SignUpButton>
-              </Show>
-              <Show when="signed-in">
-                <UserButton />
-              </Show>
-            </Suspense>
-          </header>
-          {children}
+          <TooltipProvider>
+            <header className="flex h-16 items-center justify-between gap-4 px-4">
+              <Link
+                href="/"
+                className="text-sm font-semibold tracking-tight text-foreground"
+              >
+                Flash Cardy Course
+              </Link>
+              <Suspense>
+                <HeaderAccount />
+              </Suspense>
+            </header>
+            {children}
+            <Toaster position="bottom-right" theme="dark" />
+          </TooltipProvider>
         </ClerkProvider>
       </body>
     </html>

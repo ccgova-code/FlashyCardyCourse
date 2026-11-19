@@ -1,0 +1,64 @@
+---
+alwaysApply: true
+---
+# AI flashcard generation
+
+AI features in this app call OpenAI through the Vercel AI SDK package `ai`.
+Do not add `@ai-sdk/openai`, the OpenAI SDK, or another model provider, and do
+not call the OpenAI HTTP API directly. The only model string is
+`"openai/gpt-6-astra"`.
+
+The only AI feature is flashcard generation. It creates cards for a deck the
+signed-in user owns. Each generated card has a `front` and a `back`, matching
+the columns on `cards` in [src/db/schema.ts](mdc:src/db/schema.ts).
+
+## Where the call runs
+
+`generateText` runs only inside a Server Action, after Zod `safeParse` and the
+`userId` check, and only when `has({ feature: "ai_flashcard_generation" })` is
+true. Billing follows
+[.cursor/rules/clerk-billing.mdc](mdc:.cursor/rules/clerk-billing.mdc). A
+missing feature returns an error and does not write `cards`.
+
+A page, Client Component, or Route Handler does not import `generateText` or
+`Output`. The action receives a plain object (topic and the requested count).
+It does not read `FormData`.
+
+## Structured output
+
+Generate the cards with `generateText` and `Output.array` from `ai`. Set
+`minItems` and `maxItems` to the same requested count so the array length is
+exactly that number. Each element is an object with `front` and `back` strings.
+`output` is that array.
+
+```ts
+import { generateText, Output } from "ai"
+import { z } from "zod"
+
+const count = 10
+
+const { output } = await generateText({
+  model: "openai/gpt-6-astra",
+  output: Output.array({
+    element: z.object({
+      front: z.string(),
+      back: z.string(),
+    }),
+    minItems: count,
+    maxItems: count,
+  }),
+  prompt: `Generate ${count} flashcards. Each card has a front and a back.`,
+})
+```
+
+`count` is the validated number of cards the action was asked to create. Use
+that same number for `minItems`, `maxItems`, and the prompt. Do not use
+`Output.object` for this feature, and do not use `generateObject`.
+
+## Saving the cards
+
+After `output` is returned, insert each card through the helpers in
+[src/db/queries/cards.ts](mdc:src/db/queries/cards.ts), as required by
+[.cursor/rules/data-access.mdc](mdc:.cursor/rules/data-access.mdc). Pass the
+`userId` from `auth()` and the deck id. Map `front` and `back` from each
+element onto those helpers. Do not insert from the model call itself.

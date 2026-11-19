@@ -8,9 +8,20 @@ Clerk is the only authentication system. Do not add another auth library, custom
 passwords, session cookies, or JWT handling.
 
 Session UI and route protection stay on the Clerk helpers already in the app:
-`ClerkProvider` in [app/layout.tsx](mdc:app/layout.tsx), `SignIn` and `SignUp`
-on the sign-in and sign-up pages, and `clerkMiddleware` in
-[proxy.ts](mdc:proxy.ts).
+`ClerkProvider` in [app/layout.tsx](mdc:app/layout.tsx) and `clerkMiddleware` in
+[proxy.ts](mdc:proxy.ts). Sign-in and sign-up open in a Clerk modal from
+shadcn `Button` components, as required by
+[.cursor/rules/shadcn-ui.mdc](mdc:.cursor/rules/shadcn-ui.mdc). Do not mount
+`<SignIn />` or `<SignUp />` as the control that starts auth.
+
+This app has no sign-in page. Do not add a `/sign-in` route, do not set
+`signInUrl` to one, and do not `redirect` a signed-out user there.
+
+## Protected pages
+
+A page that requires a session reads `userId` from `auth()`. When `userId` is
+missing, `redirect` to `/`. The homepage is where the sign-in and sign-up
+buttons live. Do not send that visitor to a sign-in page.
 
 ## Whose data
 

@@ -1,0 +1,101 @@
+---
+alwaysApply: true
+---
+# Billing
+
+Clerk Billing for individual users (B2C) is the only subscription and payment
+system. Do not add Stripe Billing, a second payments library, checkout code, or
+subscription columns on `decks` or `cards`. Plans and features are configured in
+the Clerk Dashboard. Clerk uses Stripe only to process payments. Plans do not
+sync with Stripe products.
+
+This is user billing, not organization billing. Do not check an organization
+plan, role, or permission for subscriptions.
+
+Session access still follows
+[.cursor/rules/clerk.mdc](mdc:.cursor/rules/clerk.mdc). A missing `userId` means
+signed out: do not read or write `decks` or `cards`, and do not treat that
+visitor as a subscriber. `<Show when="signed-in">` in
+[components/header-account.tsx](mdc:components/header-account.tsx) is session
+UI, not a billing check.
+
+## Plans and features
+
+Use these slugs exactly:
+
+- Plans: `free_user`, `pro`
+- Features: `three_deck_limit`, `unlimited_decks`, `ai_flashcard_generation`
+
+Check a feature when the entitlement is a capability. Check a plan when the
+whole subscription matters. Do not invent other plan or feature names, and do
+not accept a plan or feature from search params, form data, or the request body.
+
+## Server checks
+
+On the server, in Server Components and Server Actions, read `has` from
+`auth()` in `@clerk/nextjs/server`:
+
+```ts
+const { userId, has } = await auth()
+
+const hasPro = has({ plan: "pro" })
+const canGenerate = has({ feature: "ai_flashcard_generation" })
+```
+
+When a Server Component calls `has()`, render that component inside
+`<Suspense>`, the same way [app/dashboard/page.tsx](mdc:app/dashboard/page.tsx)
+loads dashboard content.
+
+Hiding a control is not the authorization check. Every Server Action that
+creates a deck or generates cards calls `has()` after Zod parsing and the
+`userId` check, and before the query helper in `src/db/queries/`. Writes still
+go through those helpers, as in
+[.cursor/rules/data-access.mdc](mdc:.cursor/rules/data-access.mdc).
+
+Deck creation in [app/dashboard/actions.ts](mdc:app/dashboard/actions.ts) calls
+`insertDeck` only when the user may add another deck:
+
+- `has({ feature: "unlimited_decks" })`: create the deck.
+- Otherwise, `has({ feature: "three_deck_limit" })`: create the deck only when
+  that user already owns fewer than three decks. Count with the decks query
+  helpers, scoped to `userId`.
+- Neither feature: return an error and do not insert.
+
+AI flashcard generation runs only when
+`has({ feature: "ai_flashcard_generation" })` is true. Otherwise return an
+error and do not write `cards`.
+
+## UI
+
+Protect billing-gated content with `<Show>` from `@clerk/nextjs`. Pass `when`
+a plan or feature and a `fallback` for everyone else. Wrap `<Show>` in
+`<Suspense>`.
+
+```tsx
+import { Show } from "@clerk/nextjs"
+import { Suspense } from "react"
+
+<Suspense>
+  <Show
+    when={{ feature: "ai_flashcard_generation" }}
+    fallback={<p>Upgrade to generate flashcards with AI.</p>}
+  >
+    {/* generation control */}
+  </Show>
+</Suspense>
+```
+
+The same shape with `when={{ plan: "pro" }}` gates plan-only UI. A denied
+billing check renders `fallback` on the current page. Do not `redirect` that
+user to a sign-in or pricing route from the failed check.
+
+Any control inside `<Show>` is still a shadcn component from `components/ui/`,
+as required by [.cursor/rules/shadcn-ui.mdc](mdc:.cursor/rules/shadcn-ui.mdc).
+
+## Pricing page
+
+Subscriptions start from `<PricingTable />` from `@clerk/nextjs` on a dedicated
+`app/pricing/page.tsx` page. Do not build a custom plan picker, checkout form,
+or payment button. Layout around the table uses theme tokens (`bg-background`,
+`text-foreground`, max width, padding). Leave the table itself as the Clerk
+component.
