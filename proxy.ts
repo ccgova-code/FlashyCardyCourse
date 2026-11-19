@@ -1,10 +1,14 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
+import { publishableKeyForHost, requestHost } from "@/lib/clerk-key";
 
-export default clerkMiddleware({
+export default clerkMiddleware(() => {}, (request) => ({
   frontendApiProxy: {
     enabled: true,
   },
-});
+  publishableKey: publishableKeyForHost(
+    requestHost((name) => request.headers.get(name)),
+  ),
+}));
 
 export const config = {
   matcher: [

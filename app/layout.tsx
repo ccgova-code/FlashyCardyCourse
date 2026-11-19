@@ -3,10 +3,12 @@ import Link from "next/link";
 import { Poppins } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { dark, shadcn } from "@clerk/ui/themes";
-import { Suspense } from "react";
+import { headers } from "next/headers";
+import { Suspense, type ReactNode } from "react";
 import { HeaderAccount } from "@/components/header-account";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { publishableKeyForHost, requestHost } from "@/lib/clerk-key";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -24,32 +26,48 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`dark ${poppins.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
-        <ClerkProvider
-          proxyUrl="/__clerk"
-          appearance={{
-            theme: [shadcn, dark],
-            captcha: { theme: "dark" },
-          }}
-          signUpUrl="/sign-up"
-          signInForceRedirectUrl="/dashboard"
-        >
-          <TooltipProvider>
-            <header className="flex h-16 items-center justify-between gap-4 px-4">
-              <Link
-                href="/"
-                className="text-sm font-semibold tracking-tight text-foreground"
-              >
-                Flash Cardy Course
-              </Link>
-              <Suspense>
-                <HeaderAccount />
-              </Suspense>
-            </header>
-            {children}
-            <Toaster position="bottom-right" theme="dark" />
-          </TooltipProvider>
-        </ClerkProvider>
+        <Suspense fallback={<SiteHeader />}>
+          <ClerkShell>{children}</ClerkShell>
+        </Suspense>
       </body>
     </html>
+  );
+}
+
+async function ClerkShell({ children }: { children: ReactNode }) {
+  const headerStore = await headers();
+  const host = requestHost((name) => headerStore.get(name));
+
+  return (
+    <ClerkProvider
+      publishableKey={publishableKeyForHost(host)}
+      proxyUrl="/__clerk"
+      appearance={{
+        theme: [shadcn, dark],
+        captcha: { theme: "dark" },
+      }}
+      signUpUrl="/sign-up"
+      signInForceRedirectUrl="/dashboard"
+    >
+      <TooltipProvider>
+        <SiteHeader account={<HeaderAccount />} />
+        {children}
+        <Toaster position="bottom-right" theme="dark" />
+      </TooltipProvider>
+    </ClerkProvider>
+  );
+}
+
+function SiteHeader({ account }: { account?: ReactNode }) {
+  return (
+    <header className="flex h-16 items-center justify-between gap-4 px-4">
+      <Link
+        href="/"
+        className="text-sm font-semibold tracking-tight text-foreground"
+      >
+        Flash Cardy Course
+      </Link>
+      {account}
+    </header>
   );
 }
