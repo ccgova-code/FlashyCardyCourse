@@ -25,6 +25,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`dark ${poppins.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <ClerkProvider
+          proxyUrl="/__clerk"
           appearance={{
             theme: [shadcn, dark],
             captcha: { theme: "dark" },
